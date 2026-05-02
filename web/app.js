@@ -58,10 +58,8 @@ const state = {
 const elements = {
   todayLabel: document.querySelector("#todayLabel"),
   totalCalories: document.querySelector("#totalCalories"),
-  goalCalories: document.querySelector("#goalCalories"),
   remainingCalories: document.querySelector("#remainingCalories"),
   totalProtein: document.querySelector("#totalProtein"),
-  goalProtein: document.querySelector("#goalProtein"),
   remainingProtein: document.querySelector("#remainingProtein"),
   proteinRing: document.querySelector("#proteinRing"),
   totalCarbs: document.querySelector("#totalCarbs"),
@@ -243,11 +241,9 @@ function render() {
   const circumference = 320.44;
 
   elements.totalCalories.textContent = formatNumber(totals.calories);
-  elements.goalCalories.textContent = formatNumber(state.settings.dailyGoal);
   elements.remainingCalories.textContent =
     remaining >= 0 ? `${formatNumber(remaining)} kcal restantes` : `+${formatNumber(Math.abs(remaining))} kcal`;
   elements.totalProtein.textContent = formatNumber(totals.protein);
-  elements.goalProtein.textContent = formatNumber(state.settings.proteinGoal);
   elements.remainingProtein.textContent =
     remainingProtein >= 0 ? `${formatNumber(remainingProtein)} g restantes` : `+${formatNumber(Math.abs(remainingProtein))} g`;
   elements.totalCarbs.textContent = formatNumber(totals.carbs);

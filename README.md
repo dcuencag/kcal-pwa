@@ -12,8 +12,8 @@ MVP funcional en `web/`:
 - Alimentos base: avena integral, pechuga de pollo, lechuga, carne picada, arroz, pasta, legumbres, frutas, verduras, lacteos, carnes, pescados y grasas.
 - Nota opcional.
 - Totales del dia.
-- Objetivo diario de kcal configurable.
-- Objetivo diario de proteina configurable.
+- Objetivo diario de kcal configurable desde ajustes.
+- Objetivo diario de proteina configurable desde ajustes.
 - Historial del dia.
 - Borrado de registros.
 - Datos guardados en `localStorage`.
