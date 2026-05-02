@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f5f1e8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kcal">
+    <title>Kcal</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./assets/icon.svg">
+    <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="todayLabel">Hoy</p>
+          <h1>Kcal</h1>
+        </div>
+        <button class="icon-button" id="settingsButton" type="button" aria-label="Ajustes">
+          <span aria-hidden="true">...</span>
+        </button>
+      </header>
+
+      <section class="summary" aria-label="Resumen diario">
+        <div class="dial-row">
+          <div class="dial-block">
+            <div class="dial" aria-hidden="true">
+              <svg viewBox="0 0 120 120" role="img">
+                <circle class="dial-track" cx="60" cy="60" r="51"></circle>
+                <circle class="dial-progress" id="goalRing" cx="60" cy="60" r="51"></circle>
+              </svg>
+              <div class="dial-copy">
+                <strong id="totalCalories">0</strong>
+                <span>kcal</span>
+              </div>
+            </div>
+            <div class="dial-meta">
+              <strong>Calorias</strong>
+              <span id="remainingCalories">2000 kcal restantes</span>
+            </div>
+          </div>
+
+          <div class="dial-block">
+            <div class="dial" aria-hidden="true">
+              <svg viewBox="0 0 120 120" role="img">
+                <circle class="dial-track" cx="60" cy="60" r="51"></circle>
+                <circle class="dial-progress protein-ring" id="proteinRing" cx="60" cy="60" r="51"></circle>
+              </svg>
+              <div class="dial-copy">
+                <strong id="totalProtein">0</strong>
+                <span>g prot</span>
+              </div>
+            </div>
+            <div class="dial-meta">
+              <strong>Proteina</strong>
+              <span id="remainingProtein">140 g restantes</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="metric">
+            <span>Objetivo</span>
+            <strong><span id="goalCalories">2000</span> kcal</strong>
+          </div>
+          <div class="metric macro protein">
+            <span>Objetivo P</span>
+            <strong><span id="goalProtein">140</span> g</strong>
+          </div>
+          <div class="metric macro carbs">
+            <span>Carbos</span>
+            <strong><span id="totalCarbs">0</span> g</strong>
+          </div>
+          <div class="metric macro fat">
+            <span>Grasa</span>
+            <strong><span id="totalFat">0</span> g</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="entry-panel" aria-label="Nuevo registro">
+        <form id="entryForm" autocomplete="off">
+          <label class="field food-field">
+            <span>Alimento</span>
+            <input id="foodInput" name="food" placeholder="Ej. arroz cocido" required>
+          </label>
+
+          <div class="food-suggestions" id="foodSuggestions" aria-label="Alimentos disponibles"></div>
+
+          <label class="field grams-field">
+            <span>Gramos</span>
+            <input id="gramsInput" name="grams" inputmode="decimal" placeholder="100" required>
+          </label>
+
+          <label class="field">
+            <span>Nota</span>
+            <input id="noteInput" name="note" placeholder="Opcional">
+          </label>
+
+          <div class="calculation-preview" id="calculationPreview" aria-live="polite">
+            <div>
+              <span>Kcal</span>
+              <strong id="previewCalories">0</strong>
+            </div>
+            <div>
+              <span>P</span>
+              <strong><span id="previewProtein">0</span> g</strong>
+            </div>
+            <div>
+              <span>C</span>
+              <strong><span id="previewCarbs">0</span> g</strong>
+            </div>
+            <div>
+              <span>G</span>
+              <strong><span id="previewFat">0</span> g</strong>
+            </div>
+          </div>
+
+          <p class="form-hint" id="foodHint">Base local en espanol cargada. Escribe para filtrar.</p>
+
+          <button class="primary-action" id="saveEntryButton" type="submit">Guardar</button>
+        </form>
+      </section>
+
+      <section class="history-section" aria-label="Registros de hoy">
+        <div class="section-head">
+          <h2>Hoy</h2>
+          <button class="text-button danger" id="clearDayButton" type="button">Borrar dia</button>
+        </div>
+        <ol class="entry-list" id="entryList"></ol>
+        <p class="empty-state" id="emptyState">Sin registros</p>
+      </section>
+    </main>
+
+    <dialog class="settings-dialog" id="settingsDialog">
+      <form method="dialog" class="settings-card">
+        <div class="section-head">
+          <h2>Ajustes</h2>
+          <button class="icon-button" type="submit" aria-label="Cerrar">x</button>
+        </div>
+        <label class="field">
+          <span>Objetivo diario de kcal</span>
+          <input id="goalInput" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span>Objetivo diario de proteina</span>
+          <input id="proteinGoalInput" inputmode="decimal">
+        </label>
+        <button class="primary-action" id="saveSettingsButton" type="button">Guardar ajustes</button>
+      </form>
+    </dialog>
+
+    <script src="./data/foods-base-es.js"></script>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
