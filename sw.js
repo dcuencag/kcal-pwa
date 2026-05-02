@@ -1,4 +1,4 @@
-const CACHE_NAME = "kcal-pwa-v10";
+const CACHE_NAME = "kcal-pwa-v11";
 const ASSETS = [
   "./",
   "./index.html",
@@ -30,7 +30,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached ?? fetch(event.request))
-  );
+  event.respondWith(networkFirst(event.request));
 });
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached ?? caches.match("./index.html");
+  }
+}
