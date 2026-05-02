@@ -203,48 +203,44 @@ h2 {
   font-size: 0.8rem;
 }
 
-.summary-grid {
+.macro-strip {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
+  border-top: 1px solid rgba(217, 208, 191, 0.72);
+  padding-top: 10px;
 }
 
-.metric {
+.macro-chip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(245, 241, 232, 0.72);
+  border: 1px solid rgba(217, 208, 191, 0.82);
+  border-radius: 999px;
+  background: rgba(245, 241, 232, 0.62);
+  padding: 8px 11px;
 }
 
-.metric span {
-  display: block;
+.macro-chip span {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
-.metric strong {
-  display: block;
-  margin-top: 3px;
+.macro-chip strong {
+  color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 1rem;
+  font-size: 0.95rem;
   white-space: nowrap;
 }
 
-.metric.macro {
-  border-left-width: 5px;
+.carbs-chip {
+  box-shadow: inset 4px 0 0 rgba(47, 123, 87, 0.28);
 }
 
-.protein {
-  border-left-color: var(--blue);
-}
-
-.carbs {
-  border-left-color: var(--green);
-}
-
-.fat {
-  border-left-color: var(--purple);
+.fat-chip {
+  box-shadow: inset 4px 0 0 rgba(116, 80, 166, 0.28);
 }
 
 .entry-panel,
@@ -505,10 +501,6 @@ h2 {
 
   .dial {
     width: min(132px, 38vw);
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
   }
 
   .calculation-preview {
