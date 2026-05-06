@@ -81,6 +81,11 @@
             <input id="foodInput" name="food" placeholder="Ej. arroz cocido" required>
           </label>
 
+          <div class="favorite-foods" id="favoriteFoodsSection" aria-label="Alimentos favoritos">
+            <span>Favoritos</span>
+            <div class="favorite-list" id="favoriteFoods"></div>
+          </div>
+
           <div class="food-suggestions" id="foodSuggestions" aria-label="Alimentos disponibles"></div>
 
           <label class="field grams-field">
@@ -142,6 +147,38 @@
           <span>Objetivo diario de proteina</span>
           <input id="proteinGoalInput" inputmode="decimal">
         </label>
+
+        <div class="custom-foods-section">
+          <div>
+            <h3>Mis alimentos</h3>
+            <p>Anade valores por 100 g.</p>
+          </div>
+          <label class="field">
+            <span>Nombre</span>
+            <input id="customFoodNameInput" placeholder="Ej. crema de cacahuete">
+          </label>
+          <div class="custom-food-grid">
+            <label class="field">
+              <span>Kcal</span>
+              <input id="customFoodCaloriesInput" inputmode="decimal" placeholder="588">
+            </label>
+            <label class="field">
+              <span>Proteina</span>
+              <input id="customFoodProteinInput" inputmode="decimal" placeholder="25">
+            </label>
+            <label class="field">
+              <span>Carbos</span>
+              <input id="customFoodCarbsInput" inputmode="decimal" placeholder="20">
+            </label>
+            <label class="field">
+              <span>Grasa</span>
+              <input id="customFoodFatInput" inputmode="decimal" placeholder="50">
+            </label>
+          </div>
+          <button class="secondary-action" id="saveCustomFoodButton" type="button">Guardar alimento</button>
+          <div class="custom-food-list" id="customFoodList"></div>
+        </div>
+
         <button class="primary-action" id="saveSettingsButton" type="button">Guardar ajustes</button>
       </form>
     </dialog>
