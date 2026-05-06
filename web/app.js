@@ -187,8 +187,16 @@ function renderFoodSuggestions() {
 
 function renderFavoriteFoods() {
   const favorites = state.foodResults.filter((food) => isFavorite(food));
-  elements.favoriteFoodsSection.hidden = favorites.length === 0;
+  elements.favoriteFoodsSection.hidden = false;
   elements.favoriteFoods.replaceChildren();
+
+  if (favorites.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "favorite-empty";
+    empty.textContent = "Sin favoritos";
+    elements.favoriteFoods.append(empty);
+    return;
+  }
 
   favorites.forEach((food) => {
     const button = document.createElement("button");
