@@ -1,6 +1,8 @@
 const STORAGE_KEY = "kcal.entries.v2";
 const LEGACY_STORAGE_KEY = "kcal.entries.v1";
 const SETTINGS_KEY = "kcal.settings.v1";
+const CUSTOM_FOODS_KEY = "kcal.customFoods.v1";
+const FAVORITE_FOODS_KEY = "kcal.favoriteFoods.v1";
 
 const FOODS = [
   { name: "Arroz blanco cocido", calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3 },
@@ -51,9 +53,13 @@ const EMBEDDED_FOODS = window.BASE_FOODS_ES ?? FOODS;
 const state = {
   entries: loadEntries(),
   settings: loadSettings(),
-  foodResults: EMBEDDED_FOODS,
+  customFoods: loadCustomFoods(),
+  favoriteFoodKeys: loadFavoriteFoodKeys(),
+  foodResults: [],
   selectedFood: null
 };
+
+state.foodResults = allFoods();
 
 const elements = {
   todayLabel: document.querySelector("#todayLabel"),
@@ -67,6 +73,8 @@ const elements = {
   goalRing: document.querySelector("#goalRing"),
   entryForm: document.querySelector("#entryForm"),
   foodInput: document.querySelector("#foodInput"),
+  favoriteFoodsSection: document.querySelector("#favoriteFoodsSection"),
+  favoriteFoods: document.querySelector("#favoriteFoods"),
   foodSuggestions: document.querySelector("#foodSuggestions"),
   gramsInput: document.querySelector("#gramsInput"),
   noteInput: document.querySelector("#noteInput"),
@@ -83,7 +91,14 @@ const elements = {
   settingsDialog: document.querySelector("#settingsDialog"),
   goalInput: document.querySelector("#goalInput"),
   proteinGoalInput: document.querySelector("#proteinGoalInput"),
-  saveSettingsButton: document.querySelector("#saveSettingsButton")
+  saveSettingsButton: document.querySelector("#saveSettingsButton"),
+  customFoodNameInput: document.querySelector("#customFoodNameInput"),
+  customFoodCaloriesInput: document.querySelector("#customFoodCaloriesInput"),
+  customFoodProteinInput: document.querySelector("#customFoodProteinInput"),
+  customFoodCarbsInput: document.querySelector("#customFoodCarbsInput"),
+  customFoodFatInput: document.querySelector("#customFoodFatInput"),
+  saveCustomFoodButton: document.querySelector("#saveCustomFoodButton"),
+  customFoodList: document.querySelector("#customFoodList")
 };
 
 init();
@@ -106,30 +121,45 @@ function init() {
   elements.clearDayButton.addEventListener("click", clearToday);
   elements.settingsButton.addEventListener("click", openSettings);
   elements.saveSettingsButton.addEventListener("click", saveSettings);
+  elements.saveCustomFoodButton.addEventListener("click", saveCustomFood);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
 
   render();
+  renderFavoriteFoods();
   renderFoodSuggestions();
   renderPreview();
-  elements.foodHint.textContent = `${EMBEDDED_FOODS.length} alimentos base cargados. Escribe para filtrar.`;
+  updateFoodHint();
 }
 
 function renderFoodSuggestions() {
   const query = normalize(elements.foodInput.value);
   const matches = state.foodResults
     .filter((food) => !query || normalize(food.name).includes(query))
+    .sort((a, b) => Number(isFavorite(b)) - Number(isFavorite(a)) || a.name.localeCompare(b.name, "es"))
     .slice(0, 20);
 
   const fragment = document.createDocumentFragment();
 
   matches.forEach((food) => {
+    const row = document.createElement("div");
+    row.className = "food-suggestion-row";
+
     const button = document.createElement("button");
     button.className = "food-suggestion";
     button.type = "button";
-    button.innerHTML = `<strong>${food.name}</strong><span>${food.calories} kcal/100g</span>`;
+
+    const name = document.createElement("strong");
+    name.textContent = food.name;
+
+    const meta = document.createElement("span");
+    meta.textContent = food.source === "propio"
+      ? `${formatNumber(food.calories)} kcal/100g · propio`
+      : `${formatNumber(food.calories)} kcal/100g`;
+
+    button.append(name, meta);
     button.addEventListener("click", () => {
       state.selectedFood = food;
       elements.foodInput.value = food.name;
@@ -140,10 +170,43 @@ function renderFoodSuggestions() {
       renderPreview();
       elements.gramsInput.focus();
     });
-    fragment.append(button);
+
+    const favoriteButton = document.createElement("button");
+    favoriteButton.className = `favorite-toggle${isFavorite(food) ? " is-active" : ""}`;
+    favoriteButton.type = "button";
+    favoriteButton.setAttribute("aria-label", isFavorite(food) ? "Quitar de favoritos" : "Anadir a favoritos");
+    favoriteButton.textContent = isFavorite(food) ? "★" : "☆";
+    favoriteButton.addEventListener("click", () => toggleFavorite(food));
+
+    row.append(button, favoriteButton);
+    fragment.append(row);
   });
 
   elements.foodSuggestions.replaceChildren(fragment);
+}
+
+function renderFavoriteFoods() {
+  const favorites = state.foodResults.filter((food) => isFavorite(food));
+  elements.favoriteFoodsSection.hidden = favorites.length === 0;
+  elements.favoriteFoods.replaceChildren();
+
+  favorites.forEach((food) => {
+    const button = document.createElement("button");
+    button.className = "favorite-food";
+    button.type = "button";
+    button.textContent = food.name;
+    button.addEventListener("click", () => {
+      state.selectedFood = food;
+      elements.foodInput.value = food.name;
+      if (!elements.gramsInput.value) {
+        elements.gramsInput.value = "100";
+      }
+      renderFoodSuggestions();
+      renderPreview();
+      elements.gramsInput.focus();
+    });
+    elements.favoriteFoods.append(button);
+  });
 }
 
 function handleSubmit(event) {
@@ -189,6 +252,7 @@ function handleSubmit(event) {
 function openSettings() {
   elements.goalInput.value = String(state.settings.dailyGoal);
   elements.proteinGoalInput.value = String(state.settings.proteinGoal);
+  renderCustomFoods();
   elements.settingsDialog.showModal();
 }
 
@@ -207,6 +271,89 @@ function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
   elements.settingsDialog.close();
   render();
+}
+
+function saveCustomFood() {
+  const name = elements.customFoodNameInput.value.trim();
+  const calories = parseNumber(elements.customFoodCaloriesInput.value);
+  const protein = parseNumber(elements.customFoodProteinInput.value);
+  const carbs = parseNumber(elements.customFoodCarbsInput.value);
+  const fat = parseNumber(elements.customFoodFatInput.value);
+
+  if (!name || calories <= 0 || protein < 0 || carbs < 0 || fat < 0) {
+    elements.customFoodNameInput.focus();
+    return;
+  }
+
+  const food = { name, calories, protein, carbs, fat, source: "propio" };
+  const foodKey = getFoodKey(food);
+
+  state.customFoods = [
+    food,
+    ...state.customFoods.filter((item) => getFoodKey(item) !== foodKey)
+  ].sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+  saveCustomFoods();
+  state.foodResults = allFoods();
+  elements.customFoodNameInput.value = "";
+  elements.customFoodCaloriesInput.value = "";
+  elements.customFoodProteinInput.value = "";
+  elements.customFoodCarbsInput.value = "";
+  elements.customFoodFatInput.value = "";
+  renderCustomFoods();
+  renderFavoriteFoods();
+  renderFoodSuggestions();
+  renderPreview();
+}
+
+function renderCustomFoods() {
+  elements.customFoodList.replaceChildren();
+
+  if (state.customFoods.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "custom-food-empty";
+    empty.textContent = "Aun no has anadido alimentos propios.";
+    elements.customFoodList.append(empty);
+    return;
+  }
+
+  state.customFoods.forEach((food) => {
+    const row = document.createElement("div");
+    row.className = "custom-food-item";
+
+    const copy = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = food.name;
+    const meta = document.createElement("span");
+    meta.textContent = `${formatNumber(food.calories)} kcal · ${formatNumber(food.protein)}P ${formatNumber(food.carbs)}C ${formatNumber(food.fat)}G`;
+    copy.append(name, meta);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "delete-button";
+    deleteButton.type = "button";
+    deleteButton.setAttribute("aria-label", "Borrar alimento propio");
+    deleteButton.textContent = "x";
+    deleteButton.addEventListener("click", () => deleteCustomFood(food));
+
+    row.append(copy, deleteButton);
+    elements.customFoodList.append(row);
+  });
+}
+
+function deleteCustomFood(food) {
+  const foodKey = getFoodKey(food);
+  state.customFoods = state.customFoods.filter((item) => getFoodKey(item) !== foodKey);
+  state.favoriteFoodKeys = state.favoriteFoodKeys.filter((key) => key !== foodKey);
+  if (state.selectedFood && getFoodKey(state.selectedFood) === foodKey) {
+    state.selectedFood = null;
+  }
+  saveCustomFoods();
+  saveFavoriteFoodKeys();
+  state.foodResults = allFoods();
+  renderCustomFoods();
+  renderFavoriteFoods();
+  renderFoodSuggestions();
+  renderPreview();
 }
 
 function clearToday() {
@@ -270,7 +417,7 @@ function renderPreview() {
   elements.saveEntryButton.disabled = !food || grams <= 0;
 
   if (!elements.foodInput.value.trim()) {
-    elements.foodHint.textContent = `${EMBEDDED_FOODS.length} alimentos base cargados. Escribe para filtrar.`;
+    updateFoodHint();
   } else if (!food) {
     elements.foodHint.textContent = "Elige un resultado concreto de la lista local.";
   } else if (!grams || grams <= 0) {
@@ -279,6 +426,12 @@ function renderPreview() {
     const source = food.source ? ` Fuente: ${food.source}.` : "";
     elements.foodHint.textContent = `${food.name}: valores aproximados por ${formatNumber(grams)} g.${source}`;
   }
+}
+
+function updateFoodHint() {
+  const ownFoods = state.customFoods.length;
+  const ownCopy = ownFoods ? ` + ${ownFoods} tuyos` : "";
+  elements.foodHint.textContent = `${EMBEDDED_FOODS.length} alimentos base${ownCopy}. Escribe para filtrar.`;
 }
 
 function renderEntries(entries) {
@@ -338,13 +491,42 @@ function selectedFood() {
 
   const needle = normalize(elements.foodInput.value);
   const food = state.foodResults.find((item) => normalize(item.name) === needle)
-    || EMBEDDED_FOODS.find((item) => normalize(item.name) === needle);
+    || allFoods().find((item) => normalize(item.name) === needle);
 
   if (food) {
     state.selectedFood = food;
   }
 
   return food;
+}
+
+function toggleFavorite(food) {
+  const foodKey = getFoodKey(food);
+  if (state.favoriteFoodKeys.includes(foodKey)) {
+    state.favoriteFoodKeys = state.favoriteFoodKeys.filter((key) => key !== foodKey);
+  } else {
+    state.favoriteFoodKeys = [...state.favoriteFoodKeys, foodKey];
+  }
+
+  saveFavoriteFoodKeys();
+  renderFavoriteFoods();
+  renderFoodSuggestions();
+}
+
+function isFavorite(food) {
+  return state.favoriteFoodKeys.includes(getFoodKey(food));
+}
+
+function getFoodKey(food) {
+  return normalize(food.name);
+}
+
+function allFoods() {
+  const customKeys = new Set(state.customFoods.map(getFoodKey));
+  return [
+    ...state.customFoods,
+    ...EMBEDDED_FOODS.filter((food) => !customKeys.has(getFoodKey(food)))
+  ];
 }
 
 function calculateNutrition(food, grams) {
@@ -413,6 +595,43 @@ function loadSettings() {
   }
 }
 
+function loadCustomFoods() {
+  try {
+    const foods = JSON.parse(localStorage.getItem(CUSTOM_FOODS_KEY)) ?? [];
+    return Array.isArray(foods)
+      ? foods
+          .filter((food) => food?.name && food.calories > 0)
+          .map((food) => ({
+            name: String(food.name),
+            calories: Number(food.calories) || 0,
+            protein: Number(food.protein) || 0,
+            carbs: Number(food.carbs) || 0,
+            fat: Number(food.fat) || 0,
+            source: "propio"
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadFavoriteFoodKeys() {
+  try {
+    const keys = JSON.parse(localStorage.getItem(FAVORITE_FOODS_KEY)) ?? [];
+    return Array.isArray(keys) ? keys.map(normalize).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
 function saveEntries() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.entries));
+}
+
+function saveCustomFoods() {
+  localStorage.setItem(CUSTOM_FOODS_KEY, JSON.stringify(state.customFoods));
+}
+
+function saveFavoriteFoodKeys() {
+  localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(state.favoriteFoodKeys));
 }
