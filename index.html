@@ -19,6 +19,7 @@
         <div>
           <p class="eyebrow" id="todayLabel">Hoy</p>
           <h1>Kcal</h1>
+          <p class="streak" id="streakLabel" hidden></p>
         </div>
         <button class="icon-button" id="settingsButton" type="button" aria-label="Ajustes">
           <span aria-hidden="true">...</span>
@@ -81,6 +82,8 @@
             <input id="foodInput" name="food" placeholder="Ej. arroz cocido" required>
           </label>
 
+          <button class="secondary-action" id="scanBarcodeButton" type="button">Escanear codigo de barras</button>
+
           <div class="favorite-foods" id="favoriteFoodsSection" aria-label="Alimentos favoritos">
             <span>Favoritos</span>
             <div class="favorite-list" id="favoriteFoods"></div>
@@ -126,12 +129,35 @@
       <section class="history-section" aria-label="Registros de hoy">
         <div class="section-head">
           <h2>Hoy</h2>
-          <button class="text-button danger" id="clearDayButton" type="button">Borrar dia</button>
+          <div class="section-actions">
+            <button class="text-button" id="repeatYesterdayButton" type="button">Repetir ayer</button>
+            <button class="text-button danger" id="clearDayButton" type="button">Borrar dia</button>
+          </div>
         </div>
         <ol class="entry-list" id="entryList"></ol>
         <p class="empty-state" id="emptyState">Sin registros</p>
       </section>
+
+      <section class="templates-section" aria-label="Plantillas de comida">
+        <div class="section-head">
+          <h2>Plantillas</h2>
+          <button class="text-button" id="saveTemplateButton" type="button">Guardar hoy</button>
+        </div>
+        <div class="template-list" id="templateList"></div>
+        <p class="empty-state" id="templateEmptyState">Sin plantillas guardadas</p>
+      </section>
     </main>
+
+    <dialog class="scan-dialog" id="scanDialog">
+      <div class="scan-card">
+        <div class="section-head">
+          <h2>Escanear</h2>
+          <button class="icon-button" id="closeScanButton" type="button" aria-label="Cerrar">x</button>
+        </div>
+        <video id="scanVideo" playsinline muted></video>
+        <p class="form-hint" id="scanHint">Apunta al codigo de barras.</p>
+      </div>
+    </dialog>
 
     <dialog class="settings-dialog" id="settingsDialog">
       <form method="dialog" class="settings-card">

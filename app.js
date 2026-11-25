@@ -3,6 +3,7 @@ const LEGACY_STORAGE_KEY = "kcal.entries.v1";
 const SETTINGS_KEY = "kcal.settings.v1";
 const CUSTOM_FOODS_KEY = "kcal.customFoods.v1";
 const FAVORITE_FOODS_KEY = "kcal.favoriteFoods.v1";
+const TEMPLATES_KEY = "kcal.templates.v1";
 
 const FOODS = [
   { name: "Arroz blanco cocido", calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3 },
@@ -55,8 +56,11 @@ const state = {
   settings: loadSettings(),
   customFoods: loadCustomFoods(),
   favoriteFoodKeys: loadFavoriteFoodKeys(),
+  templates: loadTemplates(),
   foodResults: [],
-  selectedFood: null
+  selectedFood: null,
+  scanStream: null,
+  scanRafId: null
 };
 
 state.foodResults = allFoods();
@@ -98,7 +102,17 @@ const elements = {
   customFoodCarbsInput: document.querySelector("#customFoodCarbsInput"),
   customFoodFatInput: document.querySelector("#customFoodFatInput"),
   saveCustomFoodButton: document.querySelector("#saveCustomFoodButton"),
-  customFoodList: document.querySelector("#customFoodList")
+  customFoodList: document.querySelector("#customFoodList"),
+  streakLabel: document.querySelector("#streakLabel"),
+  repeatYesterdayButton: document.querySelector("#repeatYesterdayButton"),
+  saveTemplateButton: document.querySelector("#saveTemplateButton"),
+  templateList: document.querySelector("#templateList"),
+  templateEmptyState: document.querySelector("#templateEmptyState"),
+  scanBarcodeButton: document.querySelector("#scanBarcodeButton"),
+  scanDialog: document.querySelector("#scanDialog"),
+  scanVideo: document.querySelector("#scanVideo"),
+  closeScanButton: document.querySelector("#closeScanButton"),
+  scanHint: document.querySelector("#scanHint")
 };
 
 init();
@@ -122,6 +136,11 @@ function init() {
   elements.settingsButton.addEventListener("click", openSettings);
   elements.saveSettingsButton.addEventListener("click", saveSettings);
   elements.saveCustomFoodButton.addEventListener("click", saveCustomFood);
+  elements.repeatYesterdayButton.addEventListener("click", repeatYesterday);
+  elements.saveTemplateButton.addEventListener("click", saveCurrentAsTemplate);
+  elements.scanBarcodeButton.addEventListener("click", openScanDialog);
+  elements.closeScanButton.addEventListener("click", closeScanDialog);
+  elements.scanDialog.addEventListener("close", stopScan);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
@@ -131,6 +150,7 @@ function init() {
   renderFavoriteFoods();
   renderFoodSuggestions();
   renderPreview();
+  renderTemplates();
   updateFoodHint();
 }
 
@@ -377,6 +397,115 @@ function deleteEntry(id) {
   render();
 }
 
+function repeatYesterday() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = dayKey(yesterday);
+  const entries = state.entries.filter((entry) => dayKey(entry.createdAt) === yesterdayKey);
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  addEntries(entries);
+}
+
+function addEntries(entries) {
+  const now = Date.now();
+  state.entries.push(
+    ...entries.map((entry, index) => ({
+      id: crypto.randomUUID(),
+      createdAt: new Date(now + index).toISOString(),
+      foodName: entry.foodName,
+      grams: entry.grams,
+      calories: entry.calories,
+      protein: entry.protein,
+      carbs: entry.carbs,
+      fat: entry.fat,
+      note: entry.note ?? ""
+    }))
+  );
+
+  saveEntries();
+  render();
+}
+
+function saveCurrentAsTemplate() {
+  const entries = todayEntries();
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  const name = window.prompt("Nombre de la plantilla:");
+  if (!name || !name.trim()) {
+    return;
+  }
+
+  state.templates = [
+    {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      items: entries.map((entry) => ({
+        foodName: entry.foodName,
+        grams: entry.grams,
+        calories: entry.calories,
+        protein: entry.protein,
+        carbs: entry.carbs,
+        fat: entry.fat,
+        note: entry.note ?? ""
+      }))
+    },
+    ...state.templates
+  ];
+
+  saveTemplates();
+  renderTemplates();
+}
+
+function applyTemplate(template) {
+  addEntries(template.items);
+}
+
+function deleteTemplate(id) {
+  state.templates = state.templates.filter((template) => template.id !== id);
+  saveTemplates();
+  renderTemplates();
+}
+
+function renderTemplates() {
+  elements.templateList.replaceChildren();
+  elements.templateEmptyState.hidden = state.templates.length > 0;
+
+  state.templates.forEach((template) => {
+    const row = document.createElement("div");
+    row.className = "template-item";
+
+    const name = document.createElement("strong");
+    name.textContent = template.name;
+
+    const meta = document.createElement("span");
+    const totalCalories = template.items.reduce((sum, item) => sum + item.calories, 0);
+    meta.textContent = `${template.items.length} items - ${formatNumber(totalCalories)} kcal`;
+
+    const useButton = document.createElement("button");
+    useButton.className = "text-button";
+    useButton.type = "button";
+    useButton.textContent = "Usar";
+    useButton.addEventListener("click", () => applyTemplate(template));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "delete-button";
+    deleteButton.type = "button";
+    deleteButton.setAttribute("aria-label", "Borrar plantilla");
+    deleteButton.textContent = "x";
+    deleteButton.addEventListener("click", () => deleteTemplate(template.id));
+
+    row.append(name, useButton, deleteButton);
+    elements.templateList.append(row);
+  });
+}
+
 function render() {
   const today = todayEntries();
   const totals = today.reduce(
@@ -409,6 +538,30 @@ function render() {
   elements.proteinRing.style.stroke = totals.protein <= state.settings.proteinGoal ? "var(--blue)" : "var(--green)";
 
   renderEntries(today);
+  renderStreak();
+}
+
+function renderStreak() {
+  const streak = computeStreak();
+  elements.streakLabel.hidden = streak < 2;
+  elements.streakLabel.textContent = `Racha: ${streak} dias`;
+}
+
+function computeStreak() {
+  const days = new Set(state.entries.map((entry) => dayKey(entry.createdAt)));
+  const cursor = new Date();
+  let streak = 0;
+
+  if (!days.has(dayKey(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  while (days.has(dayKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
 }
 
 function renderPreview() {
@@ -642,4 +795,142 @@ function saveCustomFoods() {
 
 function saveFavoriteFoodKeys() {
   localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(state.favoriteFoodKeys));
+}
+
+function loadTemplates() {
+  try {
+    const templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY)) ?? [];
+    return Array.isArray(templates) ? templates : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTemplates() {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(state.templates));
+}
+
+async function openScanDialog() {
+  elements.scanHint.textContent = "Apunta al codigo de barras.";
+  elements.scanDialog.showModal();
+
+  try {
+    state.scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" }
+    });
+  } catch {
+    elements.scanHint.textContent = "No se pudo acceder a la camara.";
+    return;
+  }
+
+  elements.scanVideo.srcObject = state.scanStream;
+  await elements.scanVideo.play();
+  startScan();
+}
+
+function closeScanDialog() {
+  elements.scanDialog.close();
+}
+
+async function startScan() {
+  if (window.BarcodeDetector) {
+    const detector = new window.BarcodeDetector({
+      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"]
+    });
+
+    const loop = async () => {
+      if (!state.scanStream) {
+        return;
+      }
+
+      try {
+        const codes = await detector.detect(elements.scanVideo);
+        if (codes.length > 0) {
+          handleScannedCode(codes[0].rawValue);
+          return;
+        }
+      } catch {
+        // frame not ready yet, keep trying
+      }
+
+      state.scanRafId = requestAnimationFrame(loop);
+    };
+
+    loop();
+    return;
+  }
+
+  try {
+    const { BrowserMultiFormatReader } = await import("https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/+esm");
+    const reader = new BrowserMultiFormatReader();
+    const result = await reader.decodeOnceFromVideoElement(elements.scanVideo);
+    if (state.scanStream) {
+      handleScannedCode(result.getText());
+    }
+  } catch {
+    if (state.scanStream) {
+      elements.scanHint.textContent = "Escaneo no soportado en este navegador.";
+    }
+  }
+}
+
+async function handleScannedCode(code) {
+  stopScan();
+  elements.scanHint.textContent = `Codigo ${code}: buscando...`;
+
+  try {
+    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
+    const data = await response.json();
+    const nutriments = data?.product?.nutriments;
+
+    if (!data?.product || !nutriments) {
+      elements.scanHint.textContent = "Producto no encontrado.";
+      return;
+    }
+
+    const food = {
+      name: data.product.product_name || `Producto ${code}`,
+      calories: Number(nutriments["energy-kcal_100g"]) || 0,
+      protein: Number(nutriments.proteins_100g) || 0,
+      carbs: Number(nutriments.carbohydrates_100g) || 0,
+      fat: Number(nutriments.fat_100g) || 0,
+      source: "propio"
+    };
+
+    if (food.calories <= 0) {
+      elements.scanHint.textContent = "Producto sin datos nutricionales utiles.";
+      return;
+    }
+
+    const foodKey = getFoodKey(food);
+    state.customFoods = [
+      food,
+      ...state.customFoods.filter((item) => getFoodKey(item) !== foodKey)
+    ].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    saveCustomFoods();
+    state.foodResults = allFoods();
+
+    state.selectedFood = food;
+    elements.foodInput.value = food.name;
+    elements.gramsInput.value = "100";
+    closeScanDialog();
+    renderFavoriteFoods();
+    renderFoodSuggestions();
+    renderPreview();
+    elements.gramsInput.focus();
+  } catch {
+    elements.scanHint.textContent = "Error buscando el producto.";
+  }
+}
+
+function stopScan() {
+  if (state.scanRafId) {
+    cancelAnimationFrame(state.scanRafId);
+    state.scanRafId = null;
+  }
+
+  if (state.scanStream) {
+    state.scanStream.getTracks().forEach((track) => track.stop());
+    state.scanStream = null;
+  }
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "kcal-pwa-v14";
+const CACHE_NAME = "kcal-pwa-v15";
 const ASSETS = [
   "./",
   "./index.html",
