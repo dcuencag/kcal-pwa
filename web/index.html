@@ -66,11 +66,11 @@
         <div class="macro-strip" aria-label="Resumen de carbohidratos y grasa">
           <div class="macro-chip carbs-chip">
             <span>Carbos</span>
-            <strong><span id="totalCarbs">0</span> g</strong>
+            <strong><span id="totalCarbs">0</span> / <span id="carbsGoalLabel">200</span> g</strong>
           </div>
           <div class="macro-chip fat-chip">
             <span>Grasa</span>
-            <strong><span id="totalFat">0</span> g</strong>
+            <strong><span id="totalFat">0</span> / <span id="fatGoalLabel">65</span> g</strong>
           </div>
         </div>
       </section>
@@ -94,11 +94,6 @@
           <label class="field grams-field">
             <span>Gramos</span>
             <input id="gramsInput" name="grams" inputmode="decimal" placeholder="100" required>
-          </label>
-
-          <label class="field">
-            <span>Nota</span>
-            <input id="noteInput" name="note" placeholder="Opcional">
           </label>
 
           <div class="calculation-preview" id="calculationPreview" aria-live="polite">
@@ -126,25 +121,24 @@
         </form>
       </section>
 
-      <section class="history-section" aria-label="Registros de hoy">
+      <section class="history-section" aria-label="Registros del dia">
         <div class="section-head">
-          <h2>Hoy</h2>
-          <div class="section-actions">
-            <button class="text-button" id="repeatYesterdayButton" type="button">Repetir ayer</button>
-            <button class="text-button danger" id="clearDayButton" type="button">Borrar dia</button>
+          <div class="day-nav">
+            <button class="icon-button nav-button" id="prevDayButton" type="button" aria-label="Dia anterior">‹</button>
+            <h2 id="dayLabel">Hoy</h2>
+            <button class="icon-button nav-button" id="nextDayButton" type="button" aria-label="Dia siguiente">›</button>
           </div>
+          <button class="text-button danger" id="clearDayButton" type="button">Borrar dia</button>
         </div>
         <ol class="entry-list" id="entryList"></ol>
         <p class="empty-state" id="emptyState">Sin registros</p>
       </section>
 
-      <section class="templates-section" aria-label="Plantillas de comida">
+      <section class="week-section" aria-label="Resumen semanal">
         <div class="section-head">
-          <h2>Plantillas</h2>
-          <button class="text-button" id="saveTemplateButton" type="button">Guardar hoy</button>
+          <h2>Semana</h2>
         </div>
-        <div class="template-list" id="templateList"></div>
-        <p class="empty-state" id="templateEmptyState">Sin plantillas guardadas</p>
+        <div class="week-chart" id="weekChart"></div>
       </section>
     </main>
 
@@ -172,6 +166,14 @@
         <label class="field">
           <span>Objetivo diario de proteina</span>
           <input id="proteinGoalInput" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span>Objetivo diario de carbohidratos</span>
+          <input id="carbsGoalInput" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span>Objetivo diario de grasa</span>
+          <input id="fatGoalInput" inputmode="decimal">
         </label>
 
         <div class="custom-foods-section">

@@ -3,7 +3,9 @@ const LEGACY_STORAGE_KEY = "kcal.entries.v1";
 const SETTINGS_KEY = "kcal.settings.v1";
 const CUSTOM_FOODS_KEY = "kcal.customFoods.v1";
 const FAVORITE_FOODS_KEY = "kcal.favoriteFoods.v1";
-const TEMPLATES_KEY = "kcal.templates.v1";
+
+// Anade aqui tus propios alias de busqueda, ej: bacon: "beicon".
+const ALIASES = {};
 
 const FOODS = [
   { name: "Arroz blanco cocido", calories: 130, protein: 2.7, carbs: 28.2, fat: 0.3 },
@@ -56,9 +58,9 @@ const state = {
   settings: loadSettings(),
   customFoods: loadCustomFoods(),
   favoriteFoodKeys: loadFavoriteFoodKeys(),
-  templates: loadTemplates(),
   foodResults: [],
   selectedFood: null,
+  selectedDate: new Date(),
   scanStream: null,
   scanRafId: null
 };
@@ -81,7 +83,6 @@ const elements = {
   favoriteFoods: document.querySelector("#favoriteFoods"),
   foodSuggestions: document.querySelector("#foodSuggestions"),
   gramsInput: document.querySelector("#gramsInput"),
-  noteInput: document.querySelector("#noteInput"),
   previewCalories: document.querySelector("#previewCalories"),
   previewProtein: document.querySelector("#previewProtein"),
   previewCarbs: document.querySelector("#previewCarbs"),
@@ -91,10 +92,18 @@ const elements = {
   entryList: document.querySelector("#entryList"),
   emptyState: document.querySelector("#emptyState"),
   clearDayButton: document.querySelector("#clearDayButton"),
+  dayLabel: document.querySelector("#dayLabel"),
+  prevDayButton: document.querySelector("#prevDayButton"),
+  nextDayButton: document.querySelector("#nextDayButton"),
+  weekChart: document.querySelector("#weekChart"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   goalInput: document.querySelector("#goalInput"),
   proteinGoalInput: document.querySelector("#proteinGoalInput"),
+  carbsGoalInput: document.querySelector("#carbsGoalInput"),
+  fatGoalInput: document.querySelector("#fatGoalInput"),
+  carbsGoalLabel: document.querySelector("#carbsGoalLabel"),
+  fatGoalLabel: document.querySelector("#fatGoalLabel"),
   saveSettingsButton: document.querySelector("#saveSettingsButton"),
   customFoodNameInput: document.querySelector("#customFoodNameInput"),
   customFoodCaloriesInput: document.querySelector("#customFoodCaloriesInput"),
@@ -104,10 +113,6 @@ const elements = {
   saveCustomFoodButton: document.querySelector("#saveCustomFoodButton"),
   customFoodList: document.querySelector("#customFoodList"),
   streakLabel: document.querySelector("#streakLabel"),
-  repeatYesterdayButton: document.querySelector("#repeatYesterdayButton"),
-  saveTemplateButton: document.querySelector("#saveTemplateButton"),
-  templateList: document.querySelector("#templateList"),
-  templateEmptyState: document.querySelector("#templateEmptyState"),
   scanBarcodeButton: document.querySelector("#scanBarcodeButton"),
   scanDialog: document.querySelector("#scanDialog"),
   scanVideo: document.querySelector("#scanVideo"),
@@ -132,12 +137,12 @@ function init() {
   });
   elements.foodInput.addEventListener("focus", renderFoodSuggestions);
   elements.gramsInput.addEventListener("input", renderPreview);
-  elements.clearDayButton.addEventListener("click", clearToday);
+  elements.clearDayButton.addEventListener("click", clearSelectedDay);
+  elements.prevDayButton.addEventListener("click", () => changeDay(-1));
+  elements.nextDayButton.addEventListener("click", () => changeDay(1));
   elements.settingsButton.addEventListener("click", openSettings);
   elements.saveSettingsButton.addEventListener("click", saveSettings);
   elements.saveCustomFoodButton.addEventListener("click", saveCustomFood);
-  elements.repeatYesterdayButton.addEventListener("click", repeatYesterday);
-  elements.saveTemplateButton.addEventListener("click", saveCurrentAsTemplate);
   elements.scanBarcodeButton.addEventListener("click", openScanDialog);
   elements.closeScanButton.addEventListener("click", closeScanDialog);
   elements.scanDialog.addEventListener("close", stopScan);
@@ -150,14 +155,13 @@ function init() {
   renderFavoriteFoods();
   renderFoodSuggestions();
   renderPreview();
-  renderTemplates();
   updateFoodHint();
 }
 
 function renderFoodSuggestions() {
   const query = normalize(elements.foodInput.value);
   const matches = state.foodResults
-    .filter((food) => !query || normalize(food.name).includes(query))
+    .filter((food) => matchesQuery(food, query))
     .sort((a, b) => Number(isFavorite(b)) - Number(isFavorite(a)) || a.name.localeCompare(b.name, "es"))
     .slice(0, 20);
 
@@ -265,13 +269,13 @@ function handleSubmit(event) {
     calories: nutrition.calories,
     protein: nutrition.protein,
     carbs: nutrition.carbs,
-    fat: nutrition.fat,
-    note: elements.noteInput.value.trim()
+    fat: nutrition.fat
   });
 
   saveEntries();
   elements.entryForm.reset();
   elements.foodInput.focus();
+  state.selectedDate = new Date();
   render();
   renderFoodSuggestions();
   renderPreview();
@@ -280,6 +284,8 @@ function handleSubmit(event) {
 function openSettings() {
   elements.goalInput.value = String(state.settings.dailyGoal);
   elements.proteinGoalInput.value = String(state.settings.proteinGoal);
+  elements.carbsGoalInput.value = String(state.settings.carbsGoal);
+  elements.fatGoalInput.value = String(state.settings.fatGoal);
   renderCustomFoods();
   elements.settingsDialog.showModal();
 }
@@ -287,6 +293,8 @@ function openSettings() {
 function saveSettings() {
   const dailyGoal = parseNumber(elements.goalInput.value);
   const proteinGoal = parseNumber(elements.proteinGoalInput.value);
+  const carbsGoal = parseNumber(elements.carbsGoalInput.value);
+  const fatGoal = parseNumber(elements.fatGoalInput.value);
 
   if (dailyGoal && dailyGoal > 0) {
     state.settings.dailyGoal = Math.round(dailyGoal);
@@ -294,6 +302,14 @@ function saveSettings() {
 
   if (proteinGoal && proteinGoal > 0) {
     state.settings.proteinGoal = Math.round(proteinGoal);
+  }
+
+  if (carbsGoal && carbsGoal > 0) {
+    state.settings.carbsGoal = Math.round(carbsGoal);
+  }
+
+  if (fatGoal && fatGoal > 0) {
+    state.settings.fatGoal = Math.round(fatGoal);
   }
 
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
@@ -384,9 +400,9 @@ function deleteCustomFood(food) {
   renderPreview();
 }
 
-function clearToday() {
-  const todayKey = dayKey(new Date());
-  state.entries = state.entries.filter((entry) => dayKey(entry.createdAt) !== todayKey);
+function clearSelectedDay() {
+  const selectedKey = dayKey(state.selectedDate);
+  state.entries = state.entries.filter((entry) => dayKey(entry.createdAt) !== selectedKey);
   saveEntries();
   render();
 }
@@ -397,118 +413,21 @@ function deleteEntry(id) {
   render();
 }
 
-function repeatYesterday() {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = dayKey(yesterday);
-  const entries = state.entries.filter((entry) => dayKey(entry.createdAt) === yesterdayKey);
+function changeDay(delta) {
+  const next = new Date(state.selectedDate);
+  next.setDate(next.getDate() + delta);
 
-  if (entries.length === 0) {
+  if (next > new Date()) {
     return;
   }
 
-  addEntries(entries);
-}
-
-function addEntries(entries) {
-  const now = Date.now();
-  state.entries.push(
-    ...entries.map((entry, index) => ({
-      id: crypto.randomUUID(),
-      createdAt: new Date(now + index).toISOString(),
-      foodName: entry.foodName,
-      grams: entry.grams,
-      calories: entry.calories,
-      protein: entry.protein,
-      carbs: entry.carbs,
-      fat: entry.fat,
-      note: entry.note ?? ""
-    }))
-  );
-
-  saveEntries();
+  state.selectedDate = next;
   render();
 }
 
-function saveCurrentAsTemplate() {
-  const entries = todayEntries();
-
-  if (entries.length === 0) {
-    return;
-  }
-
-  const name = window.prompt("Nombre de la plantilla:");
-  if (!name || !name.trim()) {
-    return;
-  }
-
-  state.templates = [
-    {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      items: entries.map((entry) => ({
-        foodName: entry.foodName,
-        grams: entry.grams,
-        calories: entry.calories,
-        protein: entry.protein,
-        carbs: entry.carbs,
-        fat: entry.fat,
-        note: entry.note ?? ""
-      }))
-    },
-    ...state.templates
-  ];
-
-  saveTemplates();
-  renderTemplates();
-}
-
-function applyTemplate(template) {
-  addEntries(template.items);
-}
-
-function deleteTemplate(id) {
-  state.templates = state.templates.filter((template) => template.id !== id);
-  saveTemplates();
-  renderTemplates();
-}
-
-function renderTemplates() {
-  elements.templateList.replaceChildren();
-  elements.templateEmptyState.hidden = state.templates.length > 0;
-
-  state.templates.forEach((template) => {
-    const row = document.createElement("div");
-    row.className = "template-item";
-
-    const name = document.createElement("strong");
-    name.textContent = template.name;
-
-    const meta = document.createElement("span");
-    const totalCalories = template.items.reduce((sum, item) => sum + item.calories, 0);
-    meta.textContent = `${template.items.length} items - ${formatNumber(totalCalories)} kcal`;
-
-    const useButton = document.createElement("button");
-    useButton.className = "text-button";
-    useButton.type = "button";
-    useButton.textContent = "Usar";
-    useButton.addEventListener("click", () => applyTemplate(template));
-
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "delete-button";
-    deleteButton.type = "button";
-    deleteButton.setAttribute("aria-label", "Borrar plantilla");
-    deleteButton.textContent = "x";
-    deleteButton.addEventListener("click", () => deleteTemplate(template.id));
-
-    row.append(name, useButton, deleteButton);
-    elements.templateList.append(row);
-  });
-}
-
 function render() {
-  const today = todayEntries();
-  const totals = today.reduce(
+  const selected = selectedDayEntries();
+  const totals = selected.reduce(
     (acc, entry) => ({
       calories: acc.calories + entry.calories,
       protein: acc.protein + entry.protein,
@@ -532,13 +451,65 @@ function render() {
     remainingProtein >= 0 ? `${formatNumber(remainingProtein)} g restantes` : `+${formatNumber(Math.abs(remainingProtein))} g`;
   elements.totalCarbs.textContent = formatNumber(totals.carbs);
   elements.totalFat.textContent = formatNumber(totals.fat);
+  elements.carbsGoalLabel.textContent = formatNumber(state.settings.carbsGoal);
+  elements.fatGoalLabel.textContent = formatNumber(state.settings.fatGoal);
   elements.goalRing.style.strokeDashoffset = String(circumference * (1 - progress));
   elements.goalRing.style.stroke = totals.calories <= state.settings.dailyGoal ? "var(--orange)" : "var(--red)";
   elements.proteinRing.style.strokeDashoffset = String(circumference * (1 - proteinProgress));
   elements.proteinRing.style.stroke = totals.protein <= state.settings.proteinGoal ? "var(--blue)" : "var(--green)";
 
-  renderEntries(today);
+  renderEntries(selected);
   renderStreak();
+  renderDayLabel();
+  renderWeekChart();
+}
+
+function renderDayLabel() {
+  const todayKey = dayKey(new Date());
+  const isToday = dayKey(state.selectedDate) === todayKey;
+
+  elements.dayLabel.textContent = isToday
+    ? "Hoy"
+    : new Intl.DateTimeFormat("es-ES", { weekday: "short", day: "numeric", month: "short" }).format(state.selectedDate);
+  elements.nextDayButton.disabled = isToday;
+}
+
+function renderWeekChart() {
+  const weekdayLetters = ["D", "L", "M", "X", "J", "V", "S"];
+  const days = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    days.push(date);
+  }
+
+  const totalsByDay = days.map((date) => {
+    const key = dayKey(date);
+    return state.entries
+      .filter((entry) => dayKey(entry.createdAt) === key)
+      .reduce((sum, entry) => sum + entry.calories, 0);
+  });
+
+  const maxValue = Math.max(state.settings.dailyGoal, ...totalsByDay, 1);
+
+  elements.weekChart.replaceChildren();
+
+  days.forEach((date, index) => {
+    const total = totalsByDay[index];
+    const col = document.createElement("div");
+    col.className = "week-col";
+
+    const bar = document.createElement("div");
+    bar.className = "week-bar";
+    bar.style.height = `${Math.max(4, (total / maxValue) * 100)}%`;
+    bar.style.background = total > state.settings.dailyGoal ? "var(--red)" : "var(--orange)";
+
+    const label = document.createElement("span");
+    label.textContent = weekdayLetters[date.getDay()];
+
+    col.append(bar, label);
+    elements.weekChart.append(col);
+  });
 }
 
 function renderStreak() {
@@ -682,6 +653,21 @@ function getFoodKey(food) {
   return normalize(food.name);
 }
 
+function matchesQuery(food, query) {
+  if (!query) {
+    return true;
+  }
+
+  const name = normalize(food.name);
+  if (name.includes(query)) {
+    return true;
+  }
+
+  return Object.entries(ALIASES).some(([alias, target]) => {
+    return normalize(alias).includes(query) && name.includes(normalize(target));
+  });
+}
+
 function allFoods() {
   const customKeys = new Set(state.customFoods.map(getFoodKey));
   return [
@@ -700,9 +686,9 @@ function calculateNutrition(food, grams) {
   };
 }
 
-function todayEntries() {
-  const todayKey = dayKey(new Date());
-  return state.entries.filter((entry) => dayKey(entry.createdAt) === todayKey);
+function selectedDayEntries() {
+  const selectedKey = dayKey(state.selectedDate);
+  return state.entries.filter((entry) => dayKey(entry.createdAt) === selectedKey);
 }
 
 function dayKey(value) {
@@ -741,18 +727,18 @@ function loadEntries() {
 }
 
 function loadSettings() {
+  const defaults = { dailyGoal: 2000, proteinGoal: 140, carbsGoal: 200, fatGoal: 65 };
+
   try {
-    const settings = {
-      dailyGoal: 2000,
-      proteinGoal: 140,
-      ...JSON.parse(localStorage.getItem(SETTINGS_KEY))
-    };
+    const settings = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) };
     return {
-      dailyGoal: settings.dailyGoal > 0 ? settings.dailyGoal : 2000,
-      proteinGoal: settings.proteinGoal > 0 ? settings.proteinGoal : 140
+      dailyGoal: settings.dailyGoal > 0 ? settings.dailyGoal : defaults.dailyGoal,
+      proteinGoal: settings.proteinGoal > 0 ? settings.proteinGoal : defaults.proteinGoal,
+      carbsGoal: settings.carbsGoal > 0 ? settings.carbsGoal : defaults.carbsGoal,
+      fatGoal: settings.fatGoal > 0 ? settings.fatGoal : defaults.fatGoal
     };
   } catch {
-    return { dailyGoal: 2000, proteinGoal: 140 };
+    return defaults;
   }
 }
 
@@ -795,19 +781,6 @@ function saveCustomFoods() {
 
 function saveFavoriteFoodKeys() {
   localStorage.setItem(FAVORITE_FOODS_KEY, JSON.stringify(state.favoriteFoodKeys));
-}
-
-function loadTemplates() {
-  try {
-    const templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY)) ?? [];
-    return Array.isArray(templates) ? templates : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveTemplates() {
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(state.templates));
 }
 
 async function openScanDialog() {
